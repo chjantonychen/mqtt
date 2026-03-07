@@ -72,23 +72,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Pending |
-| AUTH-02 | Phase 1 | Pending |
-| AUTH-03 | Phase 1 | Pending |
-| LOC-01 | Phase 2 | Pending |
-| LOC-02 | Phase 2 | Pending |
-| LOC-03 | Phase 2 | Pending |
-| LOC-04 | Phase 2 | Pending |
-| MQTT-01 | Phase 1 | Pending |
-| MQTT-02 | Phase 1 | Pending |
-| MQTT-03 | Phase 1 | Pending |
-| DATA-01 | Phase 3 | Pending |
-| DATA-02 | Phase 3 | Pending |
-| DATA-03 | Phase 3 | Pending |
-| UI-01 | Phase 4 | Pending |
-| UI-02 | Phase 4 | Pending |
-| UI-03 | Phase 4 | Pending |
-| UI-04 | Phase 4 | Pending |
+| AUTH-01 | Phase 1: 核心基础设施搭建 | Pending |
+| AUTH-02 | Phase 1: 核心基础设施搭建 | Pending |
+| AUTH-03 | Phase 1: 核心基础设施搭建 | Pending |
+| LOC-01 | Phase 2: 后台位置跟踪服务 | Pending |
+| LOC-02 | Phase 2: 后台位置跟踪服务 | Pending |
+| LOC-03 | Phase 2: 后台位置跟踪服务 | Pending |
+| LOC-04 | Phase 2: 后台位置跟踪服务 | Pending |
+| MQTT-01 | Phase 1: 核心基础设施搭建 | Pending |
+| MQTT-02 | Phase 1: 核心基础设施搭建 | Pending |
+| MQTT-03 | Phase 1: 核心基础设施搭建 | Pending |
+| DATA-01 | Phase 3: 数据持久化和历史回放 | Pending |
+| DATA-02 | Phase 3: 数据持久化和历史回放 | Pending |
+| DATA-03 | Phase 3: 数据持久化和历史回放 | Pending |
+| UI-01 | Phase 4: 用户界面和完整功能 | Pending |
+| UI-02 | Phase 4: 用户界面和完整功能 | Pending |
+| UI-03 | Phase 4: 用户界面和完整功能 | Pending |
+| UI-04 | Phase 4: 用户界面和完整功能 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
