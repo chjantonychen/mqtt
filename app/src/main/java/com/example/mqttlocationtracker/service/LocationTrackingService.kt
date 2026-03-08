@@ -16,6 +16,7 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.example.mqttlocationtracker.R
 import com.example.mqttlocationtracker.data.LocationData
+import com.example.mqttlocationtracker.database.cleanup.DataCleanupManager
 import com.example.mqttlocationtracker.database.entity.LocationEntity
 import com.example.mqttlocationtracker.database.repository.LocationRepository
 import com.example.mqttlocationtracker.database.sync.SyncManager
@@ -47,6 +48,7 @@ class LocationTrackingService : Service() {
     // 数据库相关
     private lateinit var locationRepository: LocationRepository
     private lateinit var syncManager: SyncManager
+    private lateinit var cleanupManager: DataCleanupManager
     
     // 网络状态监听
     private var isNetworkAvailable = false
@@ -65,6 +67,10 @@ class LocationTrackingService : Service() {
             isNetworkAvailable = false
         }
     }
+    
+    // 数据清理相关
+    private var lastCleanupTime: Long = 0
+    private val cleanupIntervalMillis = 24 * 60 * 60 * 1000L // 24小时
     
     // 协程作用域
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -103,6 +109,9 @@ class LocationTrackingService : Service() {
             
             // 初始化同步管理器
             syncManager = SyncManager(locationRepository, mqttManager, serviceScope)
+            
+            // 初始化数据清理管理器
+            cleanupManager = DataCleanupManager(locationRepository, serviceScope)
             
             // 注册网络状态监听器
             registerNetworkCallback()
@@ -411,6 +420,9 @@ class LocationTrackingService : Service() {
         
         // 发布位置数据到MQTT
         publishLocationData(locationData)
+        
+        // 定期执行数据清理
+        performPeriodicCleanup()
     }
     
     /**
@@ -481,6 +493,18 @@ class LocationTrackingService : Service() {
     private fun syncUnsentData() {
         Logger.d(TAG, "Attempting to sync unsent data")
         syncManager.syncUnsentLocations(mqttTopic)
+    }
+    
+    /**
+     * 执行定期数据清理
+     */
+    private fun performPeriodicCleanup() {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastCleanupTime > cleanupIntervalMillis) {
+            Logger.d(TAG, "Performing periodic data cleanup")
+            cleanupManager.cleanupExpiredData()
+            lastCleanupTime = currentTime
+        }
     }
     
     /**
