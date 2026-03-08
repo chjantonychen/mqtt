@@ -1,6 +1,6 @@
 # Feature Landscape
 
-**Domain:** Android MQTT Location Service
+**Domain:** Android MQTT位置服务系统
 **Researched:** 2026-03-08
 
 ## Table Stakes
@@ -9,16 +9,13 @@ Features users expect. Missing = product feels incomplete.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Real-time Location Tracking | Core value proposition of any location tracking service | Medium | Must support high-frequency updates (second-level intervals) with GPS accuracy |
-| Persistent MQTT Connection | Fundamental requirement for MQTT-based architecture | High | Must maintain connection despite network interruptions, device sleep, app backgrounding |
-| Background Service Operation | Essential for continuous tracking without user intervention | High | Requires foreground service implementation to work on modern Android versions |
-| Location History Storage | Users expect to review past locations | Medium | Local storage with export capabilities (GPX, JSON) |
-| Geofencing/Region Monitoring | Standard feature in location tracking apps | Medium | Trigger events when entering/leaving defined areas |
-| Authentication Mechanisms | Security requirement for MQTT brokers | Low | Username/password, TLS certificates, client IDs |
-| Manual Location Publishing | Basic user control over location sharing | Low | Allow users to send current location on demand |
-| Location Data Encryption | Privacy expectation in 2026 | Medium | End-to-end encryption of location payloads |
-| Multi-device Support | Users have multiple devices | Medium | Handle multiple client connections with unique identifiers |
-| Offline Location Queue | Network resilience requirement | Medium | Store locations locally when offline and send when reconnected |
+| 实时位置跟踪功能 | Core value proposition of the system | High | Must work with high frequency updates (秒级或更短间隔) and maintain accuracy |
+| 后台持续运行 | Essential for a location tracking daemon | High | Requires foreground service implementation and proper Android lifecycle management |
+| MQTT服务器连接 | Primary communication mechanism specified in requirements | Medium | Must support custom server configuration and secure connections |
+| 高精度GPS定位 | Explicitly required in constraints | Medium | Must leverage Fused Location Provider for optimal accuracy |
+| 设备认证机制 | Security requirement specified in project | Medium | Should support username/password or certificate-based authentication |
+| 位置历史回放 | Listed in active requirements | Medium | Requires local data persistence and retrieval mechanisms |
+| 功能丰富的应用界面 | Explicitly stated requirement | Medium | Users expect comprehensive settings and visualization options |
 
 ## Differentiators
 
@@ -26,16 +23,11 @@ Features that set product apart. Not expected, but valued.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Adaptive Tracking Frequency | Battery optimization based on movement/activity | High | Adjust update frequency based on user activity/motion |
-| Cross-platform Friend Tracking | Share locations with contacts on different platforms | High | Integration with mapping services for cross-platform visualization |
-| Beacon/iBeacon Support | Enhanced location precision indoors | Medium | Support for Bluetooth beacon proximity detection |
-| Motion-based Tracking Modes | Different tracking strategies for different use cases | Medium | Move mode, significant changes mode, manual mode |
-| Remote Configuration | Administer devices from central location | Medium | Push settings updates via MQTT commands |
-| Payload Compression | Reduced bandwidth/data usage | Medium | Efficient transmission over limited networks |
-| Advanced Geofencing | Complex region definitions and logic | High | Nested regions, time-based triggers, overlapping zones |
-| Location Data Analytics | Insights from movement patterns | High | Trip detection, frequently visited locations, behavior analysis |
-| Emergency/Panic Button | Immediate alert functionality | Medium | High-priority message with location during emergencies |
-| Low Power Optimization | Extended battery life during tracking | High | Intelligent power management based on device state |
+| 高频定位更新（秒级或更短间隔） | Provides more accurate tracking than typical apps | High | Requires careful power management to avoid excessive battery drain |
+| 持续连接管理 | Maintains MQTT connection despite network interruptions | Medium | Automatic reconnect with message queuing when offline |
+| 低功耗优化 | Extended battery life during continuous tracking | High | Requires intelligent location update strategies and Doze mode handling |
+| 多种定位模式 | Balance between accuracy and power consumption | Medium | Support for different priority levels (high accuracy vs. low power) |
+| 离线消息缓存 | Reliability during network outages | Medium | Store messages locally when disconnected and send when reconnected |
 
 ## Anti-Features
 
@@ -43,49 +35,36 @@ Features to explicitly NOT build.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| Continuous High-Frequency GPS | Drains battery quickly with minimal benefit | Use adaptive tracking based on movement |
-| Unencrypted Location Transmission | Security risk for user privacy | Always implement end-to-end encryption |
-| Aggressive Background Permissions | Violates user trust and privacy | Request minimal necessary permissions with clear justification |
-| Complex UI Over Customization | Overwhelms users with options | Focus on sensible defaults with essential customization |
-| iOS Platform Support | Out of current scope per project constraints | Focus exclusively on Android optimization |
-| Video/Image Transmission | Excessive bandwidth and battery drain | Keep focused on efficient location data only |
-| Social Media Integration | Privacy concerns and scope creep | Maintain focus on core location tracking functionality |
+| iOS平台支持 | Explicitly out of scope | Focus exclusively on Android platform optimization |
+| Web端应用 | Explicitly out of scope | Concentrate on mobile-first experience |
+| 视频流传输 | Outside core location tracking scope | Maintain focus on location data only |
+| 手动位置报告 | Contradicts requirement for continuous tracking | Implement automatic background tracking only |
+| 复杂地图可视化 | Not mentioned in requirements | Simple location display sufficient for MVP |
 
 ## Feature Dependencies
 
 ```
-Persistent MQTT Connection → Real-time Location Tracking
-Background Service Operation → Persistent MQTT Connection
-Authentication Mechanisms → Persistent MQTT Connection
-Location History Storage → Real-time Location Tracking
-Geofencing/Region Monitoring → Real-time Location Tracking
-Manual Location Publishing → Persistent MQTT Connection
-Location Data Encryption → Persistent MQTT Connection
-Multi-device Support → Authentication Mechanisms
-Offline Location Queue → Persistent MQTT Connection
-Adaptive Tracking Frequency → Real-time Location Tracking
-Advanced Geofencing → Geofencing/Region Monitoring
-Cross-platform Friend Tracking → Location History Storage
-Emergency/Panic Button → Real-time Location Tracking
-Remote Configuration → Persistent MQTT Connection
-Location Data Analytics → Location History Storage
+后台持续运行 → 实时位置跟踪功能
+实时位置跟踪功能 → MQTT服务器连接
+位置历史回放 → 数据持久化
+设备认证机制 → MQTT服务器连接
+高频定位更新 → 后台持续运行
 ```
 
 ## MVP Recommendation
 
 Prioritize:
-1. Real-time Location Tracking
-2. Persistent MQTT Connection
-3. Background Service Operation
-4. Authentication Mechanisms
-5. Manual Location Publishing
+1. 实时位置跟踪功能 - Core value proposition
+2. 后台持续运行 - Enables continuous tracking
+3. MQTT服务器连接 - Primary communication mechanism
+4. 高精度GPS定位 - Required accuracy level
+5. 设备认证机制 - Security requirement
 
-Defer: Advanced Geofencing, Location Data Analytics, Cross-platform Friend Tracking - these are valuable but not essential for initial validation
+Defer: 位置历史回放: Can be implemented after basic tracking works
 
 ## Sources
 
-- OwnTracks Android/iOS App Documentation (https://owntracks.org/booklet/)
-- Eclipse Paho MQTT Client Documentation
-- Android Developer Documentation on Background Services
-- PresencePublisher Android App (https://f-droid.org/packages/org.ostrya.presencepublisher)
-- Industry analysis of GPS tracking apps in 2026
+- Android Developers Documentation on background location tracking
+- MQTT Client library documentation (HiveMQ)
+- Modern Android development best practices (2025-2026)
+- Project requirements in PROJECT.md
