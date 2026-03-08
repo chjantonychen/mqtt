@@ -248,7 +248,21 @@ fun MqttDemoScreen(
                     // 连接
                     activity.lifecycleScope.launch {
                         try {
-                            mqttManager.connect()
+                            // 同时连接MQTT和服务中的MQTT客户端
+                            val mqttConnected = mqttManager.connect()
+                            locationService?.configureMqtt(
+                                serverUri = serverUri,
+                                clientId = clientId,
+                                username = if (username.isNotEmpty()) username else null,
+                                password = if (password.isNotEmpty()) password else null,
+                                useTls = serverUri.startsWith("ssl") || serverUri.startsWith("tls"),
+                                topic = topic
+                            )
+                            
+                            if (mqttConnected != null) {
+                                statusText = "已连接"
+                                isConnected = true
+                            }
                         } catch (e: Exception) {
                             statusText = "连接失败: ${e.message}"
                         }
@@ -264,6 +278,9 @@ fun MqttDemoScreen(
                     activity.lifecycleScope.launch {
                         try {
                             mqttManager.disconnect()
+                            locationService?.disconnectFromMqtt()
+                            statusText = "已断开连接"
+                            isConnected = false
                         } catch (e: Exception) {
                             statusText = "断开连接失败: ${e.message}"
                         }
@@ -319,6 +336,25 @@ fun MqttDemoScreen(
             ) {
                 Text("停止跟踪")
             }
+        }
+        
+        Divider(modifier = Modifier.padding(vertical = 16.dp))
+        
+        Text(
+            text = "历史数据",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        Button(
+            onClick = {
+                // 查看历史位置数据
+                // 这里可以导航到历史数据页面
+                statusText = "历史数据功能待实现"
+            },
+            modifier = Modifier.padding(bottom = 16.dp)
+        ) {
+            Text("查看历史位置")
         }
         
         Divider(modifier = Modifier.padding(vertical = 16.dp))
