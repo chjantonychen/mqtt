@@ -4,6 +4,7 @@ import com.hivemq.client.mqtt.MqttClient
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client
 import com.hivemq.client.mqtt.mqtt3.message.auth.Mqtt3SimpleAuth
 import com.hivemq.client.mqtt.mqtt3.message.connect.connack.Mqtt3ConnAck
+import com.example.mqttlocationtracker.utils.Logger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,6 +37,10 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
     // 线程同步
     private val mutex = Mutex()
     
+    companion object {
+        private const val TAG = "MqttManager"
+    }
+    
     interface ConnectionListener {
         fun onConnected()
         fun onDisconnected()
@@ -67,6 +72,7 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
         this.password = password
         this.useTls = useTls
         this.autoReconnect = autoReconnect
+        Logger.d(TAG, "MQTT configured with server: $serverUri, clientId: $clientId")
     }
     
     /**
@@ -79,10 +85,14 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
                     throw IllegalArgumentException("Server URI and client ID must be configured")
                 }
                 
+                Logger.d(TAG, "Attempting to connect to MQTT broker: $serverUri")
+                
                 // 解析服务器URI
                 val uri = java.net.URI(serverUri)
                 val host = uri.host
                 val port = if (uri.port != -1) uri.port else if (useTls) 8883 else 1883
+                
+                Logger.d(TAG, "Connecting to host: $host, port: $port")
                 
                 // 如果已存在客户端，先断开连接
                 client?.toAsync()?.disconnect()?.get(5, TimeUnit.SECONDS)
@@ -118,6 +128,7 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
                 
                 // 通知连接成功
                 connectionListener?.onConnected()
+                Logger.d(TAG, "MQTT connected successfully")
                 
                 // 设置连接丢失回调
                 client?.toAsync()?.handleDisconnect { throwable ->
@@ -128,6 +139,7 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
                 
                 return connAck
             } catch (e: Exception) {
+                Logger.e(TAG, "Failed to connect to MQTT broker", e)
                 connectionListener?.onConnectionLost(e)
                 if (autoReconnect) {
                     scheduleReconnect()
@@ -142,6 +154,7 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
      */
     private suspend fun handleConnectionLost(cause: Throwable?) {
         mutex.withLock {
+            Logger.w(TAG, "MQTT connection lost", cause)
             connectionListener?.onConnectionLost(cause)
             
             // 清理客户端引用
@@ -162,6 +175,7 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
      */
     private fun scheduleReconnect() {
         if (reconnectAttempts >= maxReconnectAttempts) {
+            Logger.w(TAG, "Max reconnect attempts reached, giving up")
             // 达到最大重试次数
             return
         }
@@ -174,6 +188,8 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
             maxReconnectDelayMs
         )
         
+        Logger.d(TAG, "Scheduling reconnect attempt $reconnectAttempts in ${delayMs}ms")
+        
         // 通知即将重连
         connectionListener?.onReconnecting(reconnectAttempts, delayMs)
         
@@ -183,6 +199,7 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
             try {
                 connect()
             } catch (e: Exception) {
+                Logger.e(TAG, "Reconnect attempt $reconnectAttempts failed", e)
                 // 重连失败，继续尝试
                 scheduleReconnect()
             }
@@ -195,8 +212,12 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
     suspend fun disconnect() {
         mutex.withLock {
             try {
-                client?.toAsync()?.disconnect()?.get(5, TimeUnit.SECONDS)
+                if (client?.state?.isConnected == true) {
+                    client?.toAsync()?.disconnect()?.get(5, TimeUnit.SECONDS)
+                    Logger.d(TAG, "MQTT disconnected successfully")
+                }
             } catch (e: Exception) {
+                Logger.e(TAG, "Error during MQTT disconnect", e)
                 // 忽略断开连接时的异常
             } finally {
                 client = null
@@ -213,6 +234,12 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
         mutex.withLock {
             client?.let { mqttClient ->
                 try {
+                    if (!mqttClient.state.isConnected) {
+                        throw IllegalStateException("MQTT client not connected")
+                    }
+                    
+                    Logger.d(TAG, "Publishing message to topic: $topic")
+                    
                     mqttClient.toAsync().publishWith()
                         .topic(topic)
                         .payload(payload.toByteArray())
@@ -220,7 +247,10 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
                         .retained(retained)
                         .send()
                         .get(5, TimeUnit.SECONDS)
+                        
+                    Logger.d(TAG, "Message published successfully to topic: $topic")
                 } catch (e: Exception) {
+                    Logger.e(TAG, "Failed to publish message to topic: $topic", e)
                     // 发布失败，如果启用了自动重连则触发重连
                     if (autoReconnect) {
                         coroutineScope.launch {
@@ -237,7 +267,9 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
      * 检查是否已连接
      */
     fun isConnected(): Boolean {
-        return client?.state?.isConnected == true
+        val connected = client?.state?.isConnected == true
+        Logger.d(TAG, "MQTT connection status: $connected")
+        return connected
     }
     
     /**

@@ -10,11 +10,11 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.mqttlocationtracker.R
 import com.example.mqttlocationtracker.data.LocationData
 import com.example.mqttlocationtracker.mqtt.MqttManager
+import com.example.mqttlocationtracker.utils.Logger
 import com.google.android.gms.location.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -61,7 +61,7 @@ class LocationTrackingService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "LocationTrackingService created")
+        Logger.d(TAG, "LocationTrackingService created")
         
         try {
             // 初始化位置服务
@@ -79,7 +79,7 @@ class LocationTrackingService : Service() {
                 }
                 
                 override fun onLocationAvailability(locationAvailability: LocationAvailability) {
-                    Log.d(TAG, "Location availability: ${locationAvailability.isLocationAvailable}")
+                    Logger.d(TAG, "Location availability: ${locationAvailability.isLocationAvailable}")
                 }
             }
             
@@ -90,27 +90,27 @@ class LocationTrackingService : Service() {
             startForeground(NOTIFICATION_ID, createNotification())
             
             isServiceInitialized = true
-            Log.d(TAG, "LocationTrackingService initialized successfully")
+            Logger.d(TAG, "LocationTrackingService initialized successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize LocationTrackingService", e)
+            Logger.e(TAG, "Failed to initialize LocationTrackingService", e)
             stopSelf()
         }
     }
     
     override fun onBind(intent: Intent): IBinder {
-        Log.d(TAG, "LocationTrackingService bound")
+        Logger.d(TAG, "LocationTrackingService bound")
         return binder
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "LocationTrackingService started with flags: $flags, startId: $startId")
+        Logger.d(TAG, "LocationTrackingService started with flags: $flags, startId: $startId")
         
         // 返回START_STICKY以确保服务在被杀死后能重启
         return START_STICKY
     }
     
     override fun onDestroy() {
-        Log.d(TAG, "LocationTrackingService destroying")
+        Logger.d(TAG, "LocationTrackingService destroying")
         
         // 停止跟踪
         if (isTracking) {
@@ -122,10 +122,10 @@ class LocationTrackingService : Service() {
             try {
                 if (::mqttManager.isInitialized && mqttManager.isConnected()) {
                     mqttManager.disconnect()
-                    Log.d(TAG, "MQTT connection disconnected")
+                    Logger.d(TAG, "MQTT connection disconnected")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error disconnecting MQTT", e)
+                Logger.e(TAG, "Error disconnecting MQTT", e)
             }
         }
         
@@ -133,7 +133,7 @@ class LocationTrackingService : Service() {
         serviceScope.cancel()
         
         isServiceInitialized = false
-        Log.d(TAG, "LocationTrackingService destroyed")
+        Logger.d(TAG, "LocationTrackingService destroyed")
         super.onDestroy()
     }
     
@@ -194,13 +194,13 @@ class LocationTrackingService : Service() {
         topic: String = "location/tracker"
     ) {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, cannot configure MQTT")
+            Logger.w(TAG, "Service not initialized, cannot configure MQTT")
             return
         }
         
         mqttManager.configure(serverUri, clientId, username, password, useTls)
         this.mqttTopic = topic
-        Log.d(TAG, "MQTT configured with server: $serverUri, topic: $topic")
+        Logger.d(TAG, "MQTT configured with server: $serverUri, topic: $topic")
     }
     
     /**
@@ -208,16 +208,16 @@ class LocationTrackingService : Service() {
      */
     suspend fun connectToMqtt(): Boolean {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, cannot connect to MQTT")
+            Logger.w(TAG, "Service not initialized, cannot connect to MQTT")
             return false
         }
         
         return try {
             mqttManager.connect()
-            Log.d(TAG, "MQTT connected successfully")
+            Logger.d(TAG, "MQTT connected successfully")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to connect to MQTT", e)
+            Logger.e(TAG, "Failed to connect to MQTT", e)
             false
         }
     }
@@ -227,17 +227,17 @@ class LocationTrackingService : Service() {
      */
     suspend fun disconnectFromMqtt() {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, cannot disconnect from MQTT")
+            Logger.w(TAG, "Service not initialized, cannot disconnect from MQTT")
             return
         }
         
         try {
             if (mqttManager.isConnected()) {
                 mqttManager.disconnect()
-                Log.d(TAG, "MQTT disconnected successfully")
+                Logger.d(TAG, "MQTT disconnected successfully")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error disconnecting from MQTT", e)
+            Logger.e(TAG, "Error disconnecting from MQTT", e)
         }
     }
     
@@ -246,16 +246,16 @@ class LocationTrackingService : Service() {
      */
     fun startTracking() {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, cannot start tracking")
+            Logger.w(TAG, "Service not initialized, cannot start tracking")
             return
         }
         
         if (isTracking) {
-            Log.d(TAG, "Already tracking, ignoring start request")
+            Logger.d(TAG, "Already tracking, ignoring start request")
             return
         }
         
-        Log.d(TAG, "Starting location tracking")
+        Logger.d(TAG, "Starting location tracking")
         isTracking = true
         updateNotification()
         
@@ -273,13 +273,13 @@ class LocationTrackingService : Service() {
                 locationCallback,
                 Looper.getMainLooper()
             )
-            Log.d(TAG, "Location updates requested successfully")
+            Logger.d(TAG, "Location updates requested successfully")
         } catch (e: SecurityException) {
-            Log.e(TAG, "Location permission not granted", e)
+            Logger.e(TAG, "Location permission not granted", e)
             isTracking = false
             updateNotification()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start location tracking", e)
+            Logger.e(TAG, "Failed to start location tracking", e)
             isTracking = false
             updateNotification()
         }
@@ -290,25 +290,25 @@ class LocationTrackingService : Service() {
      */
     fun stopTracking() {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, cannot stop tracking")
+            Logger.w(TAG, "Service not initialized, cannot stop tracking")
             return
         }
         
         if (!isTracking) {
-            Log.d(TAG, "Not tracking, ignoring stop request")
+            Logger.d(TAG, "Not tracking, ignoring stop request")
             return
         }
         
-        Log.d(TAG, "Stopping location tracking")
+        Logger.d(TAG, "Stopping location tracking")
         isTracking = false
         updateNotification()
         
         try {
             // 移除位置更新请求
             fusedLocationClient.removeLocationUpdates(locationCallback)
-            Log.d(TAG, "Location updates removed successfully")
+            Logger.d(TAG, "Location updates removed successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to stop location tracking", e)
+            Logger.e(TAG, "Failed to stop location tracking", e)
         }
     }
     
@@ -317,11 +317,17 @@ class LocationTrackingService : Service() {
      */
     private fun handleLocationUpdate(location: Location) {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, ignoring location update")
+            Logger.w(TAG, "Service not initialized, ignoring location update")
             return
         }
         
-        Log.d(TAG, "Location update: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}")
+        Logger.d(TAG, "Location update: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}")
+        
+        // 检查位置数据的有效性
+        if (!isLocationValid(location)) {
+            Logger.w(TAG, "Invalid location data received, ignoring")
+            return
+        }
         
         // 创建位置数据对象
         val locationData = LocationData(
@@ -338,11 +344,33 @@ class LocationTrackingService : Service() {
     }
     
     /**
+     * 检查位置数据是否有效
+     */
+    private fun isLocationValid(location: Location): Boolean {
+        // 检查基本有效性
+        if (!location.hasAccuracy() || location.accuracy <= 0) {
+            return false
+        }
+        
+        // 检查经纬度是否有效
+        if (location.latitude !in -90.0..90.0 || location.longitude !in -180.0..180.0) {
+            return false
+        }
+        
+        // 检查时间戳是否合理（不能是未来时间）
+        if (location.time > System.currentTimeMillis() + 10000) { // 允许10秒误差
+            return false
+        }
+        
+        return true
+    }
+    
+    /**
      * 发布位置数据到MQTT
      */
     private fun publishLocationData(locationData: LocationData) {
         if (!isServiceInitialized) {
-            Log.w(TAG, "Service not initialized, cannot publish location data")
+            Logger.w(TAG, "Service not initialized, cannot publish location data")
             return
         }
         
@@ -350,12 +378,12 @@ class LocationTrackingService : Service() {
             try {
                 if (mqttManager.isConnected()) {
                     mqttManager.publish(mqttTopic, locationData.toJson())
-                    Log.d(TAG, "Location data published to MQTT topic: $mqttTopic")
+                    Logger.d(TAG, "Location data published to MQTT topic: $mqttTopic")
                 } else {
-                    Log.w(TAG, "MQTT not connected, skipping location publish")
+                    Logger.w(TAG, "MQTT not connected, skipping location publish")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to publish location data to MQTT", e)
+                Logger.e(TAG, "Failed to publish location data to MQTT", e)
             }
         }
     }
