@@ -13,7 +13,13 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.example.mqttlocationtracker.R
+import com.example.mqttlocationtracker.data.LocationData
+import com.example.mqttlocationtracker.mqtt.MqttManager
 import com.google.android.gms.location.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * 前台服务，用于在后台持续跟踪位置
@@ -26,6 +32,13 @@ class LocationTrackingService : Service() {
     // 位置服务相关
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    
+    // MQTT客户端
+    private lateinit var mqttManager: MqttManager
+    private var mqttTopic: String = "location/tracker"
+    
+    // 协程作用域
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     
     // 通知ID和频道ID
     companion object {
@@ -48,6 +61,9 @@ class LocationTrackingService : Service() {
         
         // 初始化位置服务
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        
+        // 初始化MQTT管理器
+        mqttManager = MqttManager(serviceScope)
         
         // 创建位置回调
         locationCallback = object : LocationCallback() {
@@ -131,6 +147,22 @@ class LocationTrackingService : Service() {
     }
     
     /**
+     * 配置MQTT连接参数
+     */
+    fun configureMqtt(
+        serverUri: String,
+        clientId: String,
+        username: String? = null,
+        password: String? = null,
+        useTls: Boolean = false,
+        topic: String = "location/tracker"
+    ) {
+        mqttManager.configure(serverUri, clientId, username, password, useTls)
+        this.mqttTopic = topic
+        Log.d(TAG, "MQTT configured with server: $serverUri, topic: $topic")
+    }
+    
+    /**
      * 启动位置跟踪
      */
     fun startTracking() {
@@ -196,7 +228,37 @@ class LocationTrackingService : Service() {
      */
     private fun handleLocationUpdate(location: Location) {
         Log.d(TAG, "Location update: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}")
-        // TODO: 处理位置更新，例如发送到MQTT服务器
+        
+        // 创建位置数据对象
+        val locationData = LocationData(
+            latitude = location.latitude,
+            longitude = location.longitude,
+            accuracy = location.accuracy,
+            altitude = if (location.hasAltitude()) location.altitude else null,
+            speed = if (location.hasSpeed()) location.speed else null,
+            bearing = if (location.hasBearing()) location.bearing else null
+        )
+        
+        // 发布位置数据到MQTT
+        publishLocationData(locationData)
+    }
+    
+    /**
+     * 发布位置数据到MQTT
+     */
+    private fun publishLocationData(locationData: LocationData) {
+        serviceScope.launch {
+            try {
+                if (mqttManager.isConnected()) {
+                    mqttManager.publish(mqttTopic, locationData.toJson())
+                    Log.d(TAG, "Location data published to MQTT topic: $mqttTopic")
+                } else {
+                    Log.w(TAG, "MQTT not connected, skipping location publish")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to publish location data to MQTT", e)
+            }
+        }
     }
     
     /**
@@ -204,5 +266,12 @@ class LocationTrackingService : Service() {
      */
     fun isTracking(): Boolean {
         return isTracking
+    }
+    
+    /**
+     * 检查MQTT是否已连接
+     */
+    fun isMqttConnected(): Boolean {
+        return mqttManager.isConnected()
     }
 }
