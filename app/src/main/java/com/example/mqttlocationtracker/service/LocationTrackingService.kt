@@ -6,6 +6,9 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkRequest
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -15,6 +18,7 @@ import com.example.mqttlocationtracker.R
 import com.example.mqttlocationtracker.data.LocationData
 import com.example.mqttlocationtracker.database.entity.LocationEntity
 import com.example.mqttlocationtracker.database.repository.LocationRepository
+import com.example.mqttlocationtracker.database.sync.SyncManager
 import com.example.mqttlocationtracker.mqtt.MqttManager
 import com.example.mqttlocationtracker.utils.Logger
 import com.google.android.gms.location.*
@@ -42,6 +46,25 @@ class LocationTrackingService : Service() {
     
     // 数据库相关
     private lateinit var locationRepository: LocationRepository
+    private lateinit var syncManager: SyncManager
+    
+    // 网络状态监听
+    private var isNetworkAvailable = false
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            super.onAvailable(network)
+            Logger.d(TAG, "Network available")
+            isNetworkAvailable = true
+            // 网络恢复时尝试同步未发送的数据
+            syncUnsentData()
+        }
+        
+        override fun onLost(network: Network) {
+            super.onLost(network)
+            Logger.d(TAG, "Network lost")
+            isNetworkAvailable = false
+        }
+    }
     
     // 协程作用域
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -77,6 +100,12 @@ class LocationTrackingService : Service() {
             
             // 初始化数据库仓库
             locationRepository = LocationRepository(this)
+            
+            // 初始化同步管理器
+            syncManager = SyncManager(locationRepository, mqttManager, serviceScope)
+            
+            // 注册网络状态监听器
+            registerNetworkCallback()
             
             // 创建位置回调
             locationCallback = object : LocationCallback() {
@@ -120,6 +149,9 @@ class LocationTrackingService : Service() {
     override fun onDestroy() {
         Logger.d(TAG, "LocationTrackingService destroying")
         
+        // 注销网络状态监听器
+        unregisterNetworkCallback()
+        
         // 停止跟踪
         if (isTracking) {
             stopTracking()
@@ -143,6 +175,33 @@ class LocationTrackingService : Service() {
         isServiceInitialized = false
         Logger.d(TAG, "LocationTrackingService destroyed")
         super.onDestroy()
+    }
+    
+    /**
+     * 注册网络状态监听器
+     */
+    private fun registerNetworkCallback() {
+        try {
+            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            val networkRequest = NetworkRequest.Builder().build()
+            connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+            Logger.d(TAG, "Network callback registered")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to register network callback", e)
+        }
+    }
+    
+    /**
+     * 注销网络状态监听器
+     */
+    private fun unregisterNetworkCallback() {
+        try {
+            val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+            Logger.d(TAG, "Network callback unregistered")
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to unregister network callback", e)
+        }
     }
     
     /**
@@ -406,7 +465,7 @@ class LocationTrackingService : Service() {
                     mqttManager.publish(mqttTopic, locationData.toJson())
                     Logger.d(TAG, "Location data published to MQTT topic: $mqttTopic")
                 } else {
-                    Logger.w(TAG, "MQTT not connected, skipping location publish")
+                    Logger.w(TAG, "MQTT not connected, location saved for later sync")
                     // 网络不可用时，位置数据已经在数据库中保存
                 }
             } catch (e: Exception) {
@@ -414,6 +473,14 @@ class LocationTrackingService : Service() {
                 // 发布失败，位置数据已在数据库中保存，等待后续同步
             }
         }
+    }
+    
+    /**
+     * 同步未发送的数据
+     */
+    private fun syncUnsentData() {
+        Logger.d(TAG, "Attempting to sync unsent data")
+        syncManager.syncUnsentLocations(mqttTopic)
     }
     
     /**
