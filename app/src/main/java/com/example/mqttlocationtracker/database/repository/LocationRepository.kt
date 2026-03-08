@@ -64,6 +64,34 @@ class LocationRepository(context: Context) {
     }
     
     /**
+     * 获取指定时间范围内的位置数据（挂起函数形式）
+     */
+    suspend fun getLocationsBetweenDates(startDate: Date, endDate: Date): List<LocationEntity> {
+        return try {
+            val locations = locationDao.getLocationsBetweenDates(startDate.time, endDate.time)
+            Logger.d(TAG, "Got ${locations.size} locations between dates")
+            locations
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to get locations between dates", e)
+            throw e
+        }
+    }
+    
+    /**
+     * 根据精度过滤位置数据
+     */
+    suspend fun getLocationsByAccuracy(maxAccuracy: Float): List<LocationEntity> {
+        return try {
+            val locations = locationDao.getLocationsByAccuracy(maxAccuracy)
+            Logger.d(TAG, "Got ${locations.size} locations with accuracy <= $maxAccuracy")
+            locations
+        } catch (e: Exception) {
+            Logger.e(TAG, "Failed to get locations by accuracy", e)
+            throw e
+        }
+    }
+    
+    /**
      * 获取最新的N条位置数据
      */
     suspend fun getLatestLocations(limit: Int): List<LocationEntity> {

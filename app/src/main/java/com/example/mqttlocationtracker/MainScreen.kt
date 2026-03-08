@@ -6,21 +6,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.mqttlocationtracker.data.LocationData
-import com.example.mqttlocationtracker.mqtt.MqttManager
 import com.example.mqttlocationtracker.service.LocationTrackingService
+import com.example.mqttlocationtracker.ui.history.HistoryViewModel
 import com.example.mqttlocationtracker.ui.main.MainViewModel
-import com.example.mqttlocationtracker.ui.main.MainViewModelFactory
-import com.example.mqttlocationtracker.ui.settings.SettingsManager
 import com.example.mqttlocationtracker.utils.PermissionManager
 import kotlinx.coroutines.launch
 
@@ -29,7 +25,17 @@ fun MainScreen(
     viewModel: MainViewModel,
     permissionManager: PermissionManager,
     locationService: LocationTrackingService?,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onNavigateToMap: () -> Unit,
+    onNavigateToHistory: () -> Unit,
+    onNavigateToStats: () -> Unit,
+    onNavigateToExport: () -> Unit,
+    onNavigateToHelp: () -> Unit,
+    onNavigateToAbout: () -> Unit,
+    onManualCleanup: () -> Unit,
+    onNavigateToShare: () -> Unit,
+    onNavigateToHeatmap: () -> Unit,
+    onNavigateToGeofence: () -> Unit
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -47,6 +53,12 @@ fun MainScreen(
             TopAppBar(
                 title = { Text("MQTT位置跟踪器") },
                 actions = {
+                    IconButton(onClick = onNavigateToHelp) {
+                        Icon(
+                            imageVector = Icons.Default.Help,
+                            contentDescription = "帮助"
+                        )
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             imageVector = Icons.Default.Settings,
@@ -124,6 +136,13 @@ fun MainScreen(
                             enabled = uiState.isConnected
                         ) {
                             Text("断开连接")
+                        }
+                        
+                        Button(
+                            onClick = { viewModel.testMqttConnection() },
+                            enabled = !uiState.isConnected && !uiState.isTestingConnection
+                        ) {
+                            Text(if (uiState.isTestingConnection) "测试中..." else "测试连接")
                         }
                     }
                 }
@@ -291,7 +310,7 @@ fun MainScreen(
                 }
             }
             
-            // 历史数据
+            // 地图和历史数据
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -303,19 +322,133 @@ fun MainScreen(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "历史数据",
+                        text = "地图和历史数据",
                         style = MaterialTheme.typography.headlineSmall,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Button(
+                            onClick = onNavigateToMap,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 4.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Map, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("查看地图")
+                        }
+                        
+                        OutlinedButton(
+                            onClick = onNavigateToHeatmap,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 4.dp)
+                        ) {
+                            Text("热力图")
+                        }
+                    }
+                    
                     Button(
-                        onClick = {
-                            // 查看历史位置数据
-                            // 这里可以导航到历史数据页面
-                        },
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                        onClick = onNavigateToHistory,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
                     ) {
                         Text("查看历史位置")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToStats,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("统计数据")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToGeofence,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("地理围栏")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToStats,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("统计数据")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToShare,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("分享位置")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onManualCleanup,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("清理历史数据")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToAbout,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("关于")
+                    }
+                }
+            }
+                    
+                    Button(
+                        onClick = onNavigateToHistory,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("查看历史位置")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToStats,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("统计数据")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToExport,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("导出数据")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = onNavigateToAbout,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("关于")
                     }
                 }
             }

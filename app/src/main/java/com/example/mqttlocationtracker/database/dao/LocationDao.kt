@@ -93,4 +93,16 @@ interface LocationDao {
      */
     @Query("SELECT COUNT(*) FROM locations WHERE is_synced = 0")
     suspend fun getUnsyncedLocationCount(): Int
+    
+    /**
+     * 获取指定时间范围内的位置数据（挂起函数形式）
+     */
+    @Query("SELECT * FROM locations WHERE timestamp BETWEEN :startTime AND :endTime ORDER BY timestamp ASC")
+    suspend fun getLocationsBetweenDates(startTime: Long, endTime: Long): List<LocationEntity>
+    
+    /**
+     * 根据精度过滤位置数据
+     */
+    @Query("SELECT * FROM locations WHERE accuracy <= :maxAccuracy ORDER BY timestamp ASC")
+    suspend fun getLocationsByAccuracy(maxAccuracy: Float): List<LocationEntity>
 }

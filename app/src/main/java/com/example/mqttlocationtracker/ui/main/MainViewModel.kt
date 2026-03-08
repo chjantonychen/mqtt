@@ -115,14 +115,50 @@ class MainViewModel(
      * 断开MQTT连接
      */
     fun disconnectFromMqtt() {
+        mqttManager.disconnect()
+    }
+    
+    /**
+     * 测试MQTT连接
+     */
+    fun testMqttConnection() {
         viewModelScope.launch {
             try {
+                _uiState.value = _uiState.value.copy(
+                    isTestingConnection = true,
+                    connectionStatus = "测试连接中..."
+                )
+                
+                // 获取当前设置
+                val serverUri = _uiState.value.serverUri
+                val clientId = _uiState.value.clientId
+                val username = if (_uiState.value.username.isNotEmpty()) _uiState.value.username else null
+                val password = if (_uiState.value.password.isNotEmpty()) _uiState.value.password else null
+                val useTls = serverUri.startsWith("ssl") || serverUri.startsWith("tls")
+                
+                // 尝试连接
+                val future = mqttManager.connect(serverUri, clientId, username, password, useTls)
+                
+                // 等待连接结果（最多等待5秒）
+                future.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                
+                // 连接成功
+                _uiState.value = _uiState.value.copy(
+                    isTestingConnection = false,
+                    connectionStatus = "连接测试成功"
+                )
+                
+                // 断开测试连接
                 mqttManager.disconnect()
             } catch (e: Exception) {
+                // 连接失败
                 _uiState.value = _uiState.value.copy(
-                    errorMessage = "断开连接失败: ${e.message}"
+                    isTestingConnection = false,
+                    connectionStatus = "连接测试失败: ${e.message}"
                 )
             }
+        }
+    }
         }
     }
     

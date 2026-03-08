@@ -26,6 +26,14 @@ class SettingsManager private constructor(context: Context) {
         private const val KEY_LOCATION_UPDATE_INTERVAL = "location_update_interval"
         private const val KEY_LOCATION_MIN_DISTANCE = "location_min_distance"
         
+        // 数据清理设置键名
+        private const val KEY_DATA_RETENTION_DAYS = "data_retention_days"
+        private const val DEFAULT_DATA_RETENTION_DAYS = 30L
+        
+        // 日志设置键名
+        private const val KEY_LOGGING_ENABLED = "logging_enabled"
+        private const val DEFAULT_LOGGING_ENABLED = true
+        
         // 默认值
         private const val DEFAULT_MQTT_SERVER_URI = "tcp://broker.hivemq.com:1883"
         private const val DEFAULT_MQTT_CLIENT_ID = "android_client"
@@ -170,6 +178,38 @@ class SettingsManager private constructor(context: Context) {
     fun setLocationMinDistance(distance: Float) {
         prefs.edit {
             putFloat(KEY_LOCATION_MIN_DISTANCE, distance)
+        }
+    }
+    
+    /**
+     * 获取数据保留天数
+     */
+    fun getDataRetentionDays(): Long {
+        return prefs.getLong(KEY_DATA_RETENTION_DAYS, DEFAULT_DATA_RETENTION_DAYS)
+    }
+    
+    /**
+     * 设置数据保留天数
+     */
+    fun setDataRetentionDays(days: Long) {
+        prefs.edit {
+            putLong(KEY_DATA_RETENTION_DAYS, days)
+        }
+    }
+    
+    /**
+     * 获取是否启用日志记录
+     */
+    fun isLoggingEnabled(): Boolean {
+        return prefs.getBoolean(KEY_LOGGING_ENABLED, DEFAULT_LOGGING_ENABLED)
+    }
+    
+    /**
+     * 设置是否启用日志记录
+     */
+    fun setLoggingEnabled(enabled: Boolean) {
+        prefs.edit {
+            putBoolean(KEY_LOGGING_ENABLED, enabled)
         }
     }
     

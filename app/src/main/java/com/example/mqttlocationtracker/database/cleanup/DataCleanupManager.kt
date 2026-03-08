@@ -1,6 +1,8 @@
 package com.example.mqttlocationtracker.database.cleanup
 
+import android.content.Context
 import com.example.mqttlocationtracker.database.repository.LocationRepository
+import com.example.mqttlocationtracker.ui.settings.SettingsManager
 import com.example.mqttlocationtracker.utils.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +13,7 @@ import java.util.concurrent.TimeUnit
  * 数据清理管理器，负责定期清理旧的历史数据
  */
 class DataCleanupManager(
+    private val context: Context,
     private val locationRepository: LocationRepository,
     private val coroutineScope: CoroutineScope
 ) {
@@ -28,9 +31,12 @@ class DataCleanupManager(
     /**
      * 清理过期的位置数据
      */
-    fun cleanupExpiredData(retentionDays: Long = DEFAULT_RETENTION_DAYS) {
+    fun cleanupExpiredData() {
         coroutineScope.launch(Dispatchers.IO) {
             try {
+                val settingsManager = SettingsManager.getInstance(context)
+                val retentionDays = settingsManager.getDataRetentionDays()
+                
                 val currentTime = System.currentTimeMillis()
                 val retentionMillis = TimeUnit.DAYS.toMillis(retentionDays)
                 val cutoffTime = currentTime - retentionMillis

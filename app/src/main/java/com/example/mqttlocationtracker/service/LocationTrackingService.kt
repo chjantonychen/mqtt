@@ -95,33 +95,39 @@ class LocationTrackingService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        Logger.d(TAG, "LocationTrackingService created")
         
         try {
+            Logger.d(TAG, "创建位置跟踪服务")
+            
             // 初始化位置服务
             fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
             
             // 初始化MQTT管理器
-            mqttManager = MqttManager(serviceScope)
+            mqttManager = MqttManager(CoroutineScope(SupervisorJob() + Dispatchers.IO))
             
-            // 初始化数据库仓库
-            locationRepository = LocationRepository(this)
+            // 初始化数据库相关组件
+            locationRepository = LocationRepository.getDatabase(this)
+            syncManager = SyncManager(locationRepository, mqttManager)
+            cleanupManager = DataCleanupManager(this, locationRepository, serviceScope)
+            backupManager = BackupManager(this, locationRepository, serviceScope)
             
-            // 初始化同步管理器
-            syncManager = SyncManager(locationRepository, mqttManager, serviceScope)
+            // 初始化位置回调
+            initLocationCallback()
             
-            // 初始化数据清理管理器
-            cleanupManager = DataCleanupManager(locationRepository, serviceScope)
+            // 初始化网络状态监听
+            initNetworkCallback()
             
-            // 注册网络状态监听器
-            registerNetworkCallback()
+            // 创建通知渠道
+            createNotificationChannel()
             
-            // 创建位置回调
-            locationCallback = object : LocationCallback() {
-                override fun onLocationResult(locationResult: LocationResult) {
-                    for (location in locationResult.locations) {
-                        handleLocationUpdate(location)
-                    }
+            // 启动前台服务
+            startForeground(NOTIFICATION_ID, createNotification())
+            
+            Logger.i(TAG, "位置跟踪服务创建成功")
+        } catch (e: Exception) {
+            Logger.e(TAG, "创建位置跟踪服务失败", e)
+        }
+    }
                 }
                 
                 override fun onLocationAvailability(locationAvailability: LocationAvailability) {
@@ -149,22 +155,29 @@ class LocationTrackingService : Service() {
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Logger.d(TAG, "LocationTrackingService started with flags: $flags, startId: $startId")
-        
-        // 返回START_STICKY以确保服务在被杀死后能重启
+        Logger.d(TAG, "启动位置跟踪服务命令")
         return START_STICKY
     }
     
     override fun onDestroy() {
-        Logger.d(TAG, "LocationTrackingService destroying")
+        super.onDestroy()
         
-        // 注销网络状态监听器
+        Logger.d(TAG, "销毁位置跟踪服务")
+        
+        // 停止位置跟踪
+        stopTracking()
+        
+        // 断开MQTT连接
+        mqttManager.disconnect()
+        
+        // 取消协程作用域
+        serviceScope.cancel()
+        
+        // 注销网络回调
         unregisterNetworkCallback()
         
-        // 停止跟踪
-        if (isTracking) {
-            stopTracking()
-        }
+        Logger.i(TAG, "位置跟踪服务已销毁")
+    }
         
         // 断开MQTT连接
         serviceScope.launch {
@@ -318,13 +331,40 @@ class LocationTrackingService : Service() {
     }
     
     /**
-     * 启动位置跟踪
+     * 开始位置跟踪
      */
     fun startTracking() {
-        if (!isServiceInitialized) {
-            Logger.w(TAG, "Service not initialized, cannot start tracking")
+        if (isTracking) {
+            Logger.d(TAG, "位置跟踪已在运行")
             return
         }
+        
+        Logger.d(TAG, "开始位置跟踪")
+        
+        val locationRequest = LocationRequest.create().apply {
+            interval = 10000 // 10秒
+            fastestInterval = 5000 // 5秒
+            priority = Priority.PRIORITY_HIGH_ACCURACY
+        }
+        
+        try {
+            fusedLocationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+            isTracking = true
+            
+            // 启动数据同步
+            syncManager.startSync()
+            
+            Logger.i(TAG, "位置跟踪已启动")
+        } catch (e: SecurityException) {
+            Logger.e(TAG, "位置跟踪启动失败：权限不足", e)
+        } catch (e: Exception) {
+            Logger.e(TAG, "位置跟踪启动失败", e)
+        }
+    }
         
         if (isTracking) {
             Logger.d(TAG, "Already tracking, ignoring start request")
@@ -365,10 +405,25 @@ class LocationTrackingService : Service() {
      * 停止位置跟踪
      */
     fun stopTracking() {
-        if (!isServiceInitialized) {
-            Logger.w(TAG, "Service not initialized, cannot stop tracking")
+        if (!isTracking) {
+            Logger.d(TAG, "位置跟踪未在运行")
             return
         }
+        
+        Logger.d(TAG, "停止位置跟踪")
+        
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback)
+            isTracking = false
+            
+            // 停止数据同步
+            syncManager.stopSync()
+            
+            Logger.i(TAG, "位置跟踪已停止")
+        } catch (e: Exception) {
+            Logger.e(TAG, "停止位置跟踪失败", e)
+        }
+    }
         
         if (!isTracking) {
             Logger.d(TAG, "Not tracking, ignoring stop request")
@@ -389,13 +444,33 @@ class LocationTrackingService : Service() {
     }
     
     /**
-     * 处理位置更新
+     * 处理新位置
      */
-    private fun handleLocationUpdate(location: Location) {
-        if (!isServiceInitialized) {
-            Logger.w(TAG, "Service not initialized, ignoring location update")
-            return
+    private fun handleNewLocation(location: Location) {
+        Logger.d(TAG, "处理新位置: 纬度=${location.latitude}, 经度=${location.longitude}")
+        
+        try {
+            // 创建位置数据对象
+            val locationData = LocationData(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                accuracy = location.accuracy,
+                altitude = if (location.hasAltitude()) location.altitude else null,
+                speed = if (location.hasSpeed()) location.speed else null,
+                timestamp = System.currentTimeMillis()
+            )
+            
+            // 发布到MQTT
+            publishLocationToMqtt(locationData)
+            
+            // 保存到本地数据库
+            saveLocationToDatabase(locationData)
+            
+            Logger.d(TAG, "位置处理完成")
+        } catch (e: Exception) {
+            Logger.e(TAG, "处理新位置失败", e)
         }
+    }
         
         Logger.d(TAG, "Location update: lat=${location.latitude}, lng=${location.longitude}, acc=${location.accuracy}")
         
@@ -448,28 +523,48 @@ class LocationTrackingService : Service() {
     }
     
     /**
-     * 保存位置数据到数据库
+     * 保存位置到本地数据库
      */
     private fun saveLocationToDatabase(locationData: LocationData) {
         serviceScope.launch {
             try {
-                val locationEntity = LocationEntity.fromLocationData(locationData)
+                Logger.d(TAG, "保存位置到数据库: ${locationData.latitude}, ${locationData.longitude}")
+                val locationEntity = LocationEntity(
+                    latitude = locationData.latitude,
+                    longitude = locationData.longitude,
+                    accuracy = locationData.accuracy,
+                    altitude = locationData.altitude,
+                    speed = locationData.speed,
+                    timestamp = locationData.timestamp
+                )
                 locationRepository.insertLocation(locationEntity)
-                Logger.d(TAG, "Location data saved to database")
+                Logger.d(TAG, "位置保存成功")
             } catch (e: Exception) {
-                Logger.e(TAG, "Failed to save location data to database", e)
+                Logger.e(TAG, "保存位置到数据库失败", e)
             }
+        }
+    }
         }
     }
     
     /**
-     * 发布位置数据到MQTT
+     * 发布位置到MQTT
      */
-    private fun publishLocationData(locationData: LocationData) {
-        if (!isServiceInitialized) {
-            Logger.w(TAG, "Service not initialized, cannot publish location data")
-            return
+    private fun publishLocationToMqtt(locationData: LocationData) {
+        if (mqttManager.isConnected()) {
+            try {
+                Logger.d(TAG, "发布位置到MQTT: ${locationData.latitude}, ${locationData.longitude}")
+                val json = locationData.toJson()
+                mqttManager.publish(mqttTopic, json, false, 1)
+                Logger.d(TAG, "位置发布成功")
+            } catch (e: Exception) {
+                Logger.e(TAG, "发布位置到MQTT失败", e)
+                // 发布失败，位置数据将保存在本地数据库中
+            }
+        } else {
+            Logger.d(TAG, "MQTT未连接，跳过发布")
         }
+    }
         
         serviceScope.launch {
             try {
@@ -529,9 +624,24 @@ class LocationTrackingService : Service() {
     }
     
     /**
-     * 获取位置数据仓库
+     * 初始化位置回调
      */
-    fun getLocationRepository(): LocationRepository {
-        return locationRepository
+    private fun initLocationCallback() {
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                Logger.d(TAG, "收到位置更新")
+                locationResult.lastLocation?.let { location ->
+                    handleNewLocation(location)
+                } ?: run {
+                    Logger.w(TAG, "位置结果为空")
+                }
+            }
+            
+            override fun onLocationAvailability(locationAvailability: LocationAvailability) {
+                if (!locationAvailability.isLocationAvailable) {
+                    Logger.w(TAG, "位置服务不可用")
+                }
+            }
+        }
     }
 }

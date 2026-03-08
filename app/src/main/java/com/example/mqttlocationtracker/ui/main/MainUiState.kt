@@ -10,6 +10,7 @@ import com.example.mqttlocationtracker.data.LocationData
 data class MainUiState(
     val isConnected: Boolean = false,
     val isTracking: Boolean = false,
+    val isTestingConnection: Boolean = false,
     val currentLocation: LocationData? = null,
     val connectionStatus: String = "未连接",
     val serverUri: String = "tcp://broker.hivemq.com:1883",

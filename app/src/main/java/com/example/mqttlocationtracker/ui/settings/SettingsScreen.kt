@@ -1,30 +1,30 @@
 package com.example.mqttlocationtracker.ui.settings
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.mqttlocationtracker.utils.Logger
 
-/**
- * 设置界面
- */
 @Composable
 fun SettingsScreen(
     settingsManager: SettingsManager,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToPrivacy: () -> Unit,
+    onNavigateToCloudSync: () -> Unit,
+    onNavigateToBackupRestore: () -> Unit
 ) {
-    var mqttServerUri by remember { mutableStateOf(settingsManager.getMqttServerUri()) }
-    var mqttClientId by remember { mutableStateOf(settingsManager.getMqttClientId()) }
-    var mqttUsername by remember { mutableStateOf(settingsManager.getMqttUsername() ?: "") }
-    var mqttPassword by remember { mutableStateOf(settingsManager.getMqttPassword() ?: "") }
-    var mqttUseTls by remember { mutableStateOf(settingsManager.isMqttUseTls()) }
-    var mqttTopic by remember { mutableStateOf(settingsManager.getMqttTopic()) }
-    var locationUpdateInterval by remember { mutableStateOf(settingsManager.getLocationUpdateInterval().toString()) }
-    var locationMinDistance by remember { mutableStateOf(settingsManager.getLocationMinDistance().toString()) }
+    var serverUri by remember { mutableStateOf(settingsManager.getServerUri()) }
+    var clientId by remember { mutableStateOf(settingsManager.getClientId()) }
+    var username by remember { mutableStateOf(settingsManager.getUsername()) }
+    var password by remember { mutableStateOf(settingsManager.getPassword()) }
+    var topic by remember { mutableStateOf(settingsManager.getTopic()) }
+    var dataRetentionDays by remember { mutableStateOf(settingsManager.getDataRetentionDays()) }
+    var loggingEnabled by remember { mutableStateOf(settingsManager.isLoggingEnabled()) }
     
     Scaffold(
         topBar = {
@@ -33,10 +33,236 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.ArrowBack,
+                            imageVector = Icons.Default.ArrowBack,
                             contentDescription = "返回"
                         )
                     }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            // MQTT配置
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "MQTT配置",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = serverUri,
+                        onValueChange = { serverUri = it },
+                        label = { Text("服务器URI") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = clientId,
+                        onValueChange = { clientId = it },
+                        label = { Text("客户端ID") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        label = { Text("用户名(可选)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("密码(可选)") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = topic,
+                        onValueChange = { topic = it },
+                        label = { Text("主题") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    )
+                }
+            }
+            
+            // 数据清理配置
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "数据清理配置",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Text(
+                        text = "数据保留天数",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Slider(
+                            value = dataRetentionDays.toFloat(),
+                            onValueChange = { dataRetentionDays = it.toLong() },
+                            valueRange = 1f..365f,
+                            steps = 363,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${dataRetentionDays}天",
+                            modifier = Modifier.padding(start = 16.dp)
+                        )
+                    }
+                    
+                    Text(
+                        text = "应用将自动清理超过设定天数的历史位置数据",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+            }
+            
+            // 隐私配置
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "隐私配置",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Button(
+                        onClick = onNavigateToPrivacy,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("隐私保护设置")
+                    }
+                    
+                    Button(
+                        onClick = onNavigateToCloudSync,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text("云同步设置")
+                    }
+                    
+                    Button(
+                        onClick = onNavigateToBackupRestore,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("备份与恢复")
+                    }
+                }
+            }
+            
+            // 日志配置
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "日志配置",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        Text(
+                            text = "启用日志记录",
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = loggingEnabled,
+                            onCheckedChange = { loggingEnabled = it }
+                        )
+                    }
+                }
+            }
+            
+            // 保存按钮
+            Button(
+                onClick = {
+                    settingsManager.setServerUri(serverUri)
+                    settingsManager.setClientId(clientId)
+                    settingsManager.setUsername(username)
+                    settingsManager.setPassword(password)
+                    settingsManager.setTopic(topic)
+                    settingsManager.setDataRetentionDays(dataRetentionDays)
+                    settingsManager.setLoggingEnabled(loggingEnabled)
+                    
+                    // 应用日志设置
+                    Logger.setLoggingEnabled(loggingEnabled)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Text("保存设置")
+            }
+        }
+    }
+}
                 }
             )
         }

@@ -49,30 +49,95 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
     }
     
     /**
-     * 设置连接状态监听器
+     * 发布消息到指定主题
      */
-    fun setConnectionListener(listener: ConnectionListener) {
-        this.connectionListener = listener
+    fun publish(topic: String, payload: String, retained: Boolean = false, qos: Int = 1) {
+        if (isConnected()) {
+            Logger.d(TAG, "发布消息到主题: $topic, QoS: $qos")
+            
+            val qosLevel = when (qos) {
+                0 -> com.hivemq.client.mqtt.datatypes.MqttQos.AT_MOST_ONCE
+                1 -> com.hivemq.client.mqtt.datatypes.MqttQos.AT_LEAST_ONCE
+                2 -> com.hivemq.client.mqtt.datatypes.MqttQos.EXACTLY_ONCE
+                else -> com.hivemq.client.mqtt.datatypes.MqttQos.AT_LEAST_ONCE
+            }
+            
+            try {
+                client?.publishWith()
+                    ?.topic(topic)
+                    ?.payload(payload.toByteArray())
+                    ?.qos(qosLevel)
+                    ?.retained(retained)
+                    ?.send()
+                Logger.d(TAG, "消息发布成功")
+            } catch (e: Exception) {
+                Logger.e(TAG, "消息发布失败", e)
+            }
+        } else {
+            Logger.w(TAG, "MQTT未连接，无法发布消息")
+        }
     }
     
     /**
-     * 配置MQTT连接参数
+     * 连接到MQTT服务器
      */
-    fun configure(
+    fun connect(
         serverUri: String,
         clientId: String,
         username: String? = null,
         password: String? = null,
-        useTls: Boolean = false,
-        autoReconnect: Boolean = true
-    ) {
-        this.serverUri = serverUri
-        this.clientId = clientId
-        this.username = username
-        this.password = password
-        this.useTls = useTls
-        this.autoReconnect = autoReconnect
-        Logger.d(TAG, "MQTT configured with server: $serverUri, clientId: $clientId")
+        useTls: Boolean = false
+    ): CompletableFuture<Mqtt3ConnAck> {
+        Logger.d(TAG, "连接到MQTT服务器: $serverUri, 客户端ID: $clientId")
+        
+        return mutex.withLock {
+            this.serverUri = serverUri
+            this.clientId = clientId
+            this.username = username
+            this.password = password
+            this.useTls = useTls
+            
+            val builder = MqttClient.builder()
+                .identifier(clientId)
+                .serverHost(getHost(serverUri))
+                .serverPort(getPort(serverUri, useTls))
+            
+            // 配置TLS
+            if (useTls) {
+                builder.sslConfig()
+                    .keyManagerFactory(null)
+                    .trustManagerFactory(null)
+                    .handshakeTimeout(30, TimeUnit.SECONDS)
+                    .build()
+            }
+            
+            // 配置认证
+            if (!username.isNullOrEmpty() && !password.isNullOrEmpty()) {
+                builder.simpleAuth(
+                    Mqtt3SimpleAuth.builder()
+                        .username(username)
+                        .password(password.toByteArray())
+                        .build()
+                )
+            }
+            
+            client = builder.build().toAsync()
+            
+            // 连接并返回Future
+            val future = client?.connect()?.toCompletableFuture()!!
+            
+            future.whenComplete { connAck, throwable ->
+                if (throwable != null) {
+                    Logger.e(TAG, "MQTT连接失败", throwable)
+                    connectionListener?.onDisconnected()
+                } else {
+                    Logger.i(TAG, "MQTT连接成功")
+                    connectionListener?.onConnected()
+                }
+            }
+            
+            return@withLock future
+        }
     }
     
     /**
@@ -209,13 +274,20 @@ class MqttManager(private val coroutineScope: CoroutineScope) {
     /**
      * 断开MQTT连接
      */
-    suspend fun disconnect() {
+    fun disconnect() {
+        Logger.d(TAG, "断开MQTT连接")
+        
         mutex.withLock {
             try {
-                if (client?.state?.isConnected == true) {
-                    client?.toAsync()?.disconnect()?.get(5, TimeUnit.SECONDS)
-                    Logger.d(TAG, "MQTT disconnected successfully")
-                }
+                client?.disconnect()
+                client = null
+                connectionListener?.onDisconnected()
+                Logger.i(TAG, "MQTT连接已断开")
+            } catch (e: Exception) {
+                Logger.e(TAG, "断开MQTT连接失败", e)
+            }
+        }
+    }
             } catch (e: Exception) {
                 Logger.e(TAG, "Error during MQTT disconnect", e)
                 // 忽略断开连接时的异常
