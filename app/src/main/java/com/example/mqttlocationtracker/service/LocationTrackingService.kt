@@ -13,6 +13,8 @@ import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.example.mqttlocationtracker.R
 import com.example.mqttlocationtracker.data.LocationData
+import com.example.mqttlocationtracker.database.entity.LocationEntity
+import com.example.mqttlocationtracker.database.repository.LocationRepository
 import com.example.mqttlocationtracker.mqtt.MqttManager
 import com.example.mqttlocationtracker.utils.Logger
 import com.google.android.gms.location.*
@@ -37,6 +39,9 @@ class LocationTrackingService : Service() {
     // MQTT客户端
     private lateinit var mqttManager: MqttManager
     private var mqttTopic: String = "location/tracker"
+    
+    // 数据库相关
+    private lateinit var locationRepository: LocationRepository
     
     // 协程作用域
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -69,6 +74,9 @@ class LocationTrackingService : Service() {
             
             // 初始化MQTT管理器
             mqttManager = MqttManager(serviceScope)
+            
+            // 初始化数据库仓库
+            locationRepository = LocationRepository(this)
             
             // 创建位置回调
             locationCallback = object : LocationCallback() {
@@ -339,6 +347,9 @@ class LocationTrackingService : Service() {
             bearing = if (location.hasBearing()) location.bearing else null
         )
         
+        // 保存位置数据到数据库
+        saveLocationToDatabase(locationData)
+        
         // 发布位置数据到MQTT
         publishLocationData(locationData)
     }
@@ -366,6 +377,21 @@ class LocationTrackingService : Service() {
     }
     
     /**
+     * 保存位置数据到数据库
+     */
+    private fun saveLocationToDatabase(locationData: LocationData) {
+        serviceScope.launch {
+            try {
+                val locationEntity = LocationEntity.fromLocationData(locationData)
+                locationRepository.insertLocation(locationEntity)
+                Logger.d(TAG, "Location data saved to database")
+            } catch (e: Exception) {
+                Logger.e(TAG, "Failed to save location data to database", e)
+            }
+        }
+    }
+    
+    /**
      * 发布位置数据到MQTT
      */
     private fun publishLocationData(locationData: LocationData) {
@@ -381,9 +407,11 @@ class LocationTrackingService : Service() {
                     Logger.d(TAG, "Location data published to MQTT topic: $mqttTopic")
                 } else {
                     Logger.w(TAG, "MQTT not connected, skipping location publish")
+                    // 网络不可用时，位置数据已经在数据库中保存
                 }
             } catch (e: Exception) {
                 Logger.e(TAG, "Failed to publish location data to MQTT", e)
+                // 发布失败，位置数据已在数据库中保存，等待后续同步
             }
         }
     }
@@ -407,5 +435,12 @@ class LocationTrackingService : Service() {
      */
     fun isServiceInitialized(): Boolean {
         return isServiceInitialized
+    }
+    
+    /**
+     * 获取位置数据仓库
+     */
+    fun getLocationRepository(): LocationRepository {
+        return locationRepository
     }
 }
