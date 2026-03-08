@@ -18,6 +18,7 @@ import com.example.mqttlocationtracker.R
 class LocationTrackingService : Service() {
     
     private val binder = LocalBinder()
+    private var isTracking = false
     
     // 通知ID和频道ID
     companion object {
@@ -59,6 +60,7 @@ class LocationTrackingService : Service() {
     
     override fun onDestroy() {
         Log.d(TAG, "LocationTrackingService destroyed")
+        stopTracking()
         super.onDestroy()
     }
     
@@ -73,6 +75,7 @@ class LocationTrackingService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "用于在后台持续跟踪位置的服务通知"
+                setShowBadge(false) // 不显示徽章
             }
             
             val notificationManager = getSystemService(NotificationManager::class.java)
@@ -84,19 +87,38 @@ class LocationTrackingService : Service() {
      * 创建前台服务通知
      */
     private fun createNotification(): Notification {
+        val title = if (isTracking) "位置跟踪进行中" else "位置跟踪服务运行中"
+        val content = if (isTracking) "正在持续跟踪您的位置" else "服务运行中，点击开始跟踪"
+        
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("位置跟踪服务运行中")
-            .setContentText("正在后台持续跟踪您的位置")
-            .setSmallIcon(R.drawable.ic_notification) // 需要创建通知图标
+            .setContentTitle(title)
+            .setContentText(content)
+            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true) // 设置为持续通知
+            .setShowWhen(false) // 不显示时间戳
             .build()
+    }
+    
+    /**
+     * 更新通知
+     */
+    private fun updateNotification() {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.notify(NOTIFICATION_ID, createNotification())
     }
     
     /**
      * 启动位置跟踪
      */
     fun startTracking() {
+        if (isTracking) {
+            Log.d(TAG, "Already tracking, ignoring start request")
+            return
+        }
+        
         Log.d(TAG, "Starting location tracking")
+        isTracking = true
+        updateNotification()
         // TODO: 实现位置跟踪逻辑
     }
     
@@ -104,7 +126,14 @@ class LocationTrackingService : Service() {
      * 停止位置跟踪
      */
     fun stopTracking() {
+        if (!isTracking) {
+            Log.d(TAG, "Not tracking, ignoring stop request")
+            return
+        }
+        
         Log.d(TAG, "Stopping location tracking")
+        isTracking = false
+        updateNotification()
         // TODO: 停止位置跟踪逻辑
     }
     
@@ -112,7 +141,6 @@ class LocationTrackingService : Service() {
      * 检查服务是否正在跟踪位置
      */
     fun isTracking(): Boolean {
-        // TODO: 实现跟踪状态检查
-        return false
+        return isTracking
     }
 }
